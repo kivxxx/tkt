@@ -185,7 +185,7 @@ class _NTUSTInfoSystemPageState extends State<NTUSTInfoSystemPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('台科大資訊系統'),
+        title: const Text('資訊系統'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
