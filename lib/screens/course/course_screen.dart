@@ -9,6 +9,7 @@ import 'package:tkt/services/course_service.dart';
 import 'package:tkt/services/schedule_service.dart';
 import 'package:tkt/utils/course_time_util.dart';
 import 'package:tkt/widgets/ntust_login_prompt_dialog.dart';
+import 'package:tkt/pages/webview_screen.dart';
 
 
 class CourseScheduleScreen extends StatefulWidget {
@@ -68,37 +69,130 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> with Single
 
   Future<void> _importCourses(BuildContext context) async {
     if (!context.mounted) return;
+    
+    // 顯示載入中對話框
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return WillPopScope(
+          onWillPop: () async => false,
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      },
+    );
+
     var loginStatus = await CheckLogin.course_login();
     Log.d('Login Status: ${loginStatus.toString()}');
 
     if (loginStatus == CourseConnectorStatus.loginFail) {
       if (!context.mounted) return;
-      final shouldProceedToLogin = await _showLoginPromptDialog(context);
-      if (shouldProceedToLogin == true) {
-        // 使用者完成了登入流程，重新檢查登入狀態
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已完成登入，正在重新檢查登入狀態...')),
+      // 關閉載入中對話框
+      Navigator.pop(context);
+      // 直接開啟選課系統登入頁面
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WebViewScreen(
+            initialUrl: 'https://stuinfosys.ntust.edu.tw/NTUSTSSOServ/SSO/Login/CourseSelection',
+            title: '選課系統登入',
+            onLoginResult: (success) async {
+              if (success) {
+                // 登入成功後自動返回
+                Navigator.pop(context, true);
+              }
+            },
+          ),
+        ),
+      );
+
+      if (result == true) {
+        // 使用者從選課系統返回，先等待一下讓登入完成
+        // 顯示載入中對話框
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return WillPopScope(
+              onWillPop: () async => false,
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          },
         );
 
-        // 重新檢查一次登入狀態
-        loginStatus = await CheckLogin.course_login();
-        Log.d('Rechecked Login Status: ${loginStatus.toString()}');
+        await Future.delayed(const Duration(seconds: 2));
+        
+        // 關閉載入中對話框
+        if (!context.mounted) return;
+        Navigator.pop(context);
+        
+        // 開啟選課系統頁面
+        final courseResult = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WebViewScreen(
+              initialUrl: 'https://courseselection.ntust.edu.tw/ChooseList/D01/D01',
+              title: '選課系統',
+              onLoginResult: (success) async {
+                if (success) {
+                  // 等待選課系統載入
+                  await Future.delayed(const Duration(seconds: 3));
+                  Navigator.pop(context, true);
+                }
+              },
+            ),
+          ),
+        );
 
-        if (loginStatus == CourseConnectorStatus.loginFail) {
+        if (courseResult == true) {
+          // 使用者從選課系統返回，重新檢查登入狀態
+          // 顯示載入中對話框
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext context) {
+              return WillPopScope(
+                onWillPop: () async => false,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            },
+          );
           if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('正在重新檢查登入狀態...')),
+          );
+
+          // 重新檢查一次登入狀態
+          loginStatus = await CheckLogin.course_login();
+          Log.d('Rechecked Login Status: ${loginStatus.toString()}');
+
+          if (loginStatus == CourseConnectorStatus.loginFail) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('登入後仍無法檢測到有效的課程系統 Session，請稍後再試或登出後重試。')),
           );
+          // 關閉載入中對話框
+          Navigator.pop(context);
+          return;
+          }
+          // 如果重新檢查成功，繼續匯入流程
+        } else {
           return;
         }
-        // 如果重新檢查成功，繼續匯入流程
       } else {
         // 使用者取消登入
         return;
       }
     } else if (loginStatus == CourseConnectorStatus.unknownError) {
       if (!context.mounted) return;
+      // 關閉載入中對話框
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('檢查登入狀態時發生未知錯誤，請稍後再試')),
       );
@@ -210,11 +304,15 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> with Single
       }
       
       if (!context.mounted) return;
+      // 關閉載入中對話框
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('課表匯入成功 (已自動合併連續課程)')),
       );
     } catch (e) {
       if (!context.mounted) return;
+      // 關閉載入中對話框
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('匯入失敗：$e')),
       );
