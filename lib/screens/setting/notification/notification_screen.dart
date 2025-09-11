@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/course_service.dart';
 import '../../../services/notification_service.dart';
+import '../../../services/exact_alarm_service.dart';
 
 
 class NotificationScreen extends StatefulWidget {
@@ -131,10 +132,57 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     title: const Text('啟用課程提醒'),
                     subtitle: const Text('在課程開始前發送推播通知'),
                     value: _courseNotificationEnabled,
-                    onChanged: (bool value) {
+                    onChanged: (bool value) async {
                       setState(() {
                         _courseNotificationEnabled = value;
                       });
+
+                      // 若用戶嘗試開啟，先檢查 Android 精準鬧鐘
+                      if (value) {
+                        final allowed = await ExactAlarmService.isExactAlarmAllowed();
+                        if (!allowed) {
+                          if (!mounted) return;
+                          await showDialog<void>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('未開啟精準鬧鐘'),
+                              content: const Text('裝置尚未允許「精準鬧鐘」，將無法準時發送課程提醒。系統已為你關閉通知。'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('知道了'),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    Navigator.of(ctx).pop();
+                                    await ExactAlarmService.openExactAlarmSettings();
+                                  },
+                                  child: const Text('前往設定'),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          // 自動關回開關並儲存
+                          if (!mounted) return;
+                          setState(() {
+                            _courseNotificationEnabled = false;
+                          });
+                          await _saveNotificationSettings();
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('未開啟精準鬧鐘，已關閉課程提醒'),
+                              ),
+                            );
+                          }
+                          return;
+                        }
+                      }
+
+                      // 直接儲存設定並重排程/取消
+                      await _saveNotificationSettings();
                     },
                   ),
                 ],
