@@ -43,9 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-/windows
-/linux
-/windows/flutter
-/windows
-/linux
+/linux/flutter/
+/linux/**/generated_*
+/linux/**/generated_plugins.cmake
+/windows/flutter/
+/windows/**/generated_*
+/windows/**/generated_plugins.cmake
+/macos/Flutter/GeneratedPluginRegistrant.swift
+/macos/Flutter/ephemeral/
 /ios/build/ios/XCBuildData

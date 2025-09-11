@@ -8,6 +8,7 @@ import 'services/course_service.dart';
 import 'services/calendar_service.dart';
 import 'services/ntust_auth_service.dart';
 import 'services/notification_service.dart';
+import 'services/exact_alarm_service.dart';
 import 'providers/theme_provider.dart';
 import 'providers/announcement_provider.dart';
 import 'providers/language_provider.dart';
@@ -77,6 +78,13 @@ class _MyAppState extends State<MyApp> {
       } catch (e) {
         // 忽略快取錯誤，避免影響啟動流程
         debugPrint('Precache map failed: $e');
+      }
+
+      // Android：檢查是否允許精準鬧鐘，未開啟時引導使用者
+      try {
+        await ExactAlarmService.ensureExactAlarmEnabled(context);
+      } catch (e) {
+        debugPrint('Exact alarm check failed: $e');
       }
     });
   }

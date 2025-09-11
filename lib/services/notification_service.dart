@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../models/course_model.dart';
+import 'exact_alarm_service.dart';
 
 class NotificationService {
   static const String _enabledKey = 'course_notification_enabled';
@@ -234,6 +236,17 @@ class NotificationService {
     required String body,
   }) async {
     await initialize();
+    
+    // Android：若未允許精準鬧鐘，避免觸發未捕捉例外
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final allowed = await ExactAlarmService.isExactAlarmAllowed();
+      if (!allowed) {
+        if (kDebugMode) {
+          print('⚠️ 略過排程：未允許精準鬧鐘（scheduleNotification）');
+        }
+        return;
+      }
+    }
 
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
@@ -259,17 +272,35 @@ class NotificationService {
 
     final tz.TZDateTime tzScheduledTime = tz.TZDateTime.from(scheduledTime, tz.local);
 
-    await _notificationsPlugin.zonedSchedule(
-      course.id.hashCode,
-      title,
-      body,
-      tzScheduledTime,
-      platformChannelSpecifics,
-      payload: course.id,
-      // 不重複；如需每日/每週重複，才設定 matchDateTimeComponents
-      // matchDateTimeComponents: DateTimeComponents.time,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+    try {
+      await _notificationsPlugin.zonedSchedule(
+        course.id.hashCode,
+        title,
+        body,
+        tzScheduledTime,
+        platformChannelSpecifics,
+        payload: course.id,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } on PlatformException catch (e) {
+      if (e.code == 'exact_alarms_not_permitted') {
+        if (kDebugMode) {
+          print('⚠️ 無法使用精準鬧鐘，退回非精準排程（單次）');
+        }
+        // 退回使用非精準排程以避免崩潰
+        await _notificationsPlugin.zonedSchedule(
+          course.id.hashCode,
+          title,
+          body,
+          tzScheduledTime,
+          platformChannelSpecifics,
+          payload: course.id,
+          androidScheduleMode: AndroidScheduleMode.inexact,
+        );
+      } else {
+        rethrow;
+      }
+    }
 
     if (kDebugMode) {
       print('⏰ 定時通知已安排：');
@@ -356,16 +387,47 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    await _notificationsPlugin.zonedSchedule(
-      course.id.hashCode,
-      title,
-      body,
-      firstTrigger,
-      platformDetails,
-      payload: course.id,
-      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+    // Android：若未允許精準鬧鐘，避免觸發未捕捉例外
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final allowed = await ExactAlarmService.isExactAlarmAllowed();
+      if (!allowed) {
+        if (kDebugMode) {
+          print('⚠️ 略過排程：未允許精準鬧鐘（weekly）');
+        }
+        return;
+      }
+    }
+
+    try {
+      await _notificationsPlugin.zonedSchedule(
+        course.id.hashCode,
+        title,
+        body,
+        firstTrigger,
+        platformDetails,
+        payload: course.id,
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } on PlatformException catch (e) {
+      if (e.code == 'exact_alarms_not_permitted') {
+        if (kDebugMode) {
+          print('⚠️ 無法使用精準鬧鐘，退回非精準排程（weekly）');
+        }
+        await _notificationsPlugin.zonedSchedule(
+          course.id.hashCode,
+          title,
+          body,
+          firstTrigger,
+          platformDetails,
+          payload: course.id,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          androidScheduleMode: AndroidScheduleMode.inexact,
+        );
+      } else {
+        rethrow;
+      }
+    }
 
     if (kDebugMode) {
       print('📆 已為課程建立每週提醒: ${course.name}');
