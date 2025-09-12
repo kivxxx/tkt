@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 import '../models/course_model.dart';
 import 'app_group_preferences.dart';
 
@@ -41,18 +43,36 @@ class AppGroupService {
         debugPrint('  課程 $i: ${coursesJson[i]}');
       }
       
+      // iOS
       final success = await AppGroupPreferences.setStringList(_coursesKey, coursesJson);
       if (success) {
         // 更新最後修改時間
         await AppGroupPreferences.setInt(_lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
-        debugPrint('✅ 已儲存 ${courses.length} 門課程到 App Group');
-        
-        // 驗證資料是否正確儲存
-        final savedCourses = await AppGroupPreferences.getStringList(_coursesKey);
-        debugPrint('🔍 驗證：從 App Group 讀取到 ${savedCourses?.length ?? 0} 門課程');
+        debugPrint('✅ 已儲存 ${courses.length} 門課程到 App Group (for iOS)');
       } else {
-        debugPrint('❌ 儲存課程到 App Group 失敗');
+        debugPrint('❌ 儲存課程到 App Group 失敗 (for iOS)');
       }
+
+      // Android
+      if (Platform.isAndroid) {
+        try {
+          // 將課程列表轉換為 JSON 字串
+          final coursesDataString = jsonEncode(coursesJson);
+
+          // 儲存資料給 Android Widget
+          await HomeWidget.saveWidgetData<String>('courses_data', coursesDataString);
+
+          // 更新 Android Widget
+          await HomeWidget.updateWidget(
+            name: 'TKTWidgetProvider', // 必須與您在 Android 中定義的 Provider 名稱相符
+            androidName: 'TKTWidgetProvider',
+          );
+          debugPrint('✅ 已觸發 Android Widget 更新');
+        } catch (e) {
+          debugPrint('❌ 更新 Android Widget 時發生錯誤: $e');
+        }
+      }
+
       return success;
     } catch (e) {
       debugPrint('💥 儲存課程到 App Group 時發生錯誤: $e');
