@@ -20,7 +20,7 @@ class TktAppWidget : AppWidgetProvider() {
             try {
                 updateAppWidget(context, appWidgetManager, appWidgetId)
             } catch (e: Exception) {
-                // 忽略單次更新失敗，避免 launcher 顯示無法載入
+                Log.e(LOG_TAG, "updateAppWidget error: ${e.message}", e)
             }
         }
     }
@@ -222,14 +222,16 @@ class TktAppWidget : AppWidgetProvider() {
 
             // 清空除錯內容（已移除除錯 TextView）
 
-            // 標題顯示今日課程數
-            views.setTextViewText(R.id.tvTitle, "今日課表 (" + todayCourses.size + ")")
+            // 今日無課則顯示全部課程前四筆，方便驗證資料
+            val displayCourses = if (todayCourses.isNotEmpty()) todayCourses else allCourses
+            val title = if (todayCourses.isNotEmpty()) "今日課表 (" + todayCourses.size + ")" else "全部課程 (" + displayCourses.size + ")"
+            views.setTextViewText(R.id.tvTitle, title)
             for (i in 0 until 4) {
-                val course = if (i < todayCourses.size) todayCourses[i] else null
+                val course = if (i < displayCourses.size) displayCourses[i] else null
                 setCourseRow(views, i, course)
             }
 
-            if (todayCourses.isEmpty()) {
+            if (displayCourses.isEmpty()) {
                 views.setTextViewText(R.id.course1_title, "（無）")
                 views.setTextViewText(R.id.course1_session, "")
                 views.setTextViewText(R.id.course1_room, "")
